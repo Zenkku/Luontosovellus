@@ -1,3 +1,4 @@
+
 // 📁 viewmodel/MapViewModel.kt
 package com.example.luontopeli.viewmodel
 
@@ -16,60 +17,39 @@ import kotlinx.coroutines.launch
 
 /**
  * ViewModel karttanäkymälle (MapScreen).
- * Hallinnoi sijaintiseurantaa, reittipisteita ja luontolöytöjen näyttämistä kartalla.
+ * Hallinnoi sijaintiseurantaa, reittipisteitä ja luontolöytöjen näyttämistä kartalla.
  */
 class MapViewModel(application: Application) : AndroidViewModel(application) {
 
-    /** GPS-sijainnin seurantapalvelu */
     private val locationManager = LocationManager(application)
-    /** Room-tietokantainstanssi luontolöytöjen hakemiseen */
     private val db = AppDatabase.getDatabase(application)
 
-    /** Kävelyn aikana kerätyt reittipisteet (GeoPoint-lista) kartalle piirtämistä varten */
     val routePoints: StateFlow<List<GeoPoint>> = locationManager.routePoints
-    /** Nykyinen GPS-sijainti */
     val currentLocation: StateFlow<Location?> = locationManager.currentLocation
 
-    /** Kartalla näytettävät luontolöydöt joilla on validi sijainti */
     private val _natureSpots = MutableStateFlow<List<NatureSpot>>(emptyList())
     val natureSpots: StateFlow<List<NatureSpot>> = _natureSpots.asStateFlow()
 
     init {
-        // Lataa luontolöydöt tietokannasta heti ViewModelin luomisen yhteydessä
-        loadNatureSpots()
-    }
-
-    /** Käynnistää GPS-sijainnin seurannan. Kutsutaan MapScreenista kun sijaintiluvat on myönnetty. */
-    fun startTracking() = locationManager.startTracking()
-    /** Pysäyttää GPS-sijainnin seurannan. */
-    fun stopTracking() = locationManager.stopTracking()
-    /** Tyhjentää kaikki kerätyt reittipisteet. */
-    fun resetRoute() = locationManager.resetRoute()
-
-    /**
-     * Lataa luontolöydöt Room-tietokannasta reaktiivisesti.
-     * Hakee vain löydöt joilla on validi GPS-sijainti.
-     */
-    private fun loadNatureSpots() {
+        // Seurataan kaikkia löytöjä (myös niitä joilla ei ole sijaintia, mutta suodatetaan ne myöhemmin)
         viewModelScope.launch {
-            db.natureSpotDao().getSpotsWithLocation().collect { spots ->
-                _natureSpots.value = spots
+            db.natureSpotDao().getAllSpots().collect { spots ->
+                // Näytetään kartalla vain ne, joilla on oikea sijainti (ei 0.0, 0.0)
+                _natureSpots.value = spots.filter { it.latitude != 0.0 && it.longitude != 0.0 }
             }
         }
     }
 
-    /** Vapauttaa LocationManager-resurssit ViewModelin tuhoutuessa. */
+    fun startTracking() = locationManager.startTracking()
+    fun stopTracking() = locationManager.stopTracking()
+    fun resetRoute() = locationManager.resetRoute()
+
     override fun onCleared() {
         super.onCleared()
         locationManager.stopTracking()
     }
 }
 
-/**
- * Laajennusfunktio Long-aikaleiman muuntamiseen luettavaan päivämäärämuotoon.
- *
- * @return Muotoiltu päivämäärä (esim. "11.03.2026 14:30")
- */
 fun Long.toFormattedDate(): String {
     val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
     return sdf.format(java.util.Date(this))

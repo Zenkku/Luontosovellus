@@ -1,3 +1,4 @@
+
 // 📁 viewmodel/StatsViewModel.kt
 package com.example.luontopeli.viewmodel
 
@@ -5,6 +6,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.luontopeli.data.local.AppDatabase
+import com.example.luontopeli.data.local.entity.NatureSpot
 import com.example.luontopeli.data.local.entity.WalkSession
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,11 +16,9 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel tilastonäkymälle (StatsScreen).
  *
- * Lataa kaikki kävelykerrat ja luontolöytöjen lukumäärän Room-tietokannasta.
+ * Lataa kaikki kävelykerrat ja luontolöydöt Room-tietokannasta.
  * Tarjoaa datan StatsScreen-näkymälle yhteenvetotilastojen (askeleet, matka,
- * löydöt, lenkit) ja kävelyhistorian näyttämiseen.
- *
- * Molemmat Flow-virrat päivittyvät automaattisesti kun tietokanta muuttuu.
+ * löydöt, lenkit) ja listojen näyttämiseen.
  */
 class StatsViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -29,9 +29,9 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
     private val _allSessions = MutableStateFlow<List<WalkSession>>(emptyList())
     val allSessions: StateFlow<List<WalkSession>> = _allSessions.asStateFlow()
 
-    /** Luontolöytöjen kokonaismäärä */
-    private val _totalSpots = MutableStateFlow(0)
-    val totalSpots: StateFlow<Int> = _totalSpots.asStateFlow()
+    /** Kaikki luontolöydöt (sisältäen kommentit) */
+    private val _allSpots = MutableStateFlow<List<NatureSpot>>(emptyList())
+    val allSpots: StateFlow<List<NatureSpot>> = _allSpots.asStateFlow()
 
     init {
         // Seurataan kävelykertojen muutoksia tietokannassa
@@ -40,10 +40,10 @@ class StatsViewModel(application: Application) : AndroidViewModel(application) {
                 _allSessions.value = sessions
             }
         }
-        // Seurataan luontolöytöjen kokonaismäärän muutoksia
+        // Seurataan luontolöytöjen muutoksia
         viewModelScope.launch {
             db.natureSpotDao().getAllSpots().collect { spots ->
-                _totalSpots.value = spots.size
+                _allSpots.value = spots
             }
         }
     }

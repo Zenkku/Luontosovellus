@@ -1,3 +1,6 @@
+
+package com.example.luontopeli.viewmodel
+
 import android.app.Application
 import android.content.Context
 import android.net.Uri
@@ -6,12 +9,15 @@ import androidx.camera.core.ImageCaptureException
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.luontopeli.ml.ClassificationResult
+import com.example.luontopeli.ml.PlantClassifier
 import com.example.luontopeli.data.local.AppDatabase
 import com.example.luontopeli.data.local.entity.NatureSpot
 import com.example.luontopeli.data.remote.firebase.AuthManager
 import com.example.luontopeli.data.remote.firebase.FirestoreManager
 import com.example.luontopeli.data.remote.firebase.StorageManager
 import com.example.luontopeli.data.repository.NatureSpotRepository
+import com.example.luontopeli.location.LocationManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,14 +27,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// 📁 viewmodel/CameraViewModel.kt
-
 /**
  * ViewModel kameranäkymälle (CameraScreen).
  */
 class CameraViewModel(application: Application) : AndroidViewModel(application) {
 
     private val classifier = PlantClassifier()
+    private val locationManager = LocationManager(application)
 
     private val _classificationResult = MutableStateFlow<ClassificationResult?>(null)
     val classificationResult: StateFlow<ClassificationResult?> = _classificationResult.asStateFlow()
@@ -48,8 +53,20 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    var currentLatitude: Double = 0.0
-    var currentLongitude: Double = 0.0
+    private val _userComment = MutableStateFlow("")
+    val userComment: StateFlow<String> = _userComment.asStateFlow()
+
+    /** Seurataan sijaintia suoraan LocationManagerista */
+    val currentLocation = locationManager.currentLocation
+
+    init {
+        // Aloitetaan sijaintiseuranta kameran ajaksi
+        locationManager.startTracking()
+    }
+
+    fun onCommentChange(newComment: String) {
+        _userComment.value = newComment
+    }
 
     fun takePhoto(context: Context, imageCapture: ImageCapture) {
         _isLoading.value = true
@@ -86,11 +103,10 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    /**
-     * Tallentaa nykyisen luontolöydön Room-tietokantaan.
-     */
     fun saveCurrentSpot() {
         val imagePath = _capturedImagePath.value ?: return
+        val location = currentLocation.value
+        
         viewModelScope.launch {
             val result = _classificationResult.value
 
@@ -99,30 +115,27 @@ class CameraViewModel(application: Application) : AndroidViewModel(application) 
                     is ClassificationResult.Success -> result.label
                     else -> "Luontolöytö"
                 },
-                latitude = currentLatitude,
-                longitude = currentLongitude,
+                latitude = location?.latitude ?: 0.0,
+                longitude = location?.longitude ?: 0.0,
                 imageLocalPath = imagePath,
                 plantLabel = (result as? ClassificationResult.Success)?.label,
-                confidence = (result as? ClassificationResult.Success)?.confidence
+                confidence = (result as? ClassificationResult.Success)?.confidence,
+                comment = _userComment.value.ifBlank { null }
             )
             repository.insertSpot(spot)
             clearCapturedImage()
         }
     }
 
-    /**
-     * Vapauttaa ML Kit -resurssit ViewModelin tuhoutuessa.
-     */
     override fun onCleared() {
         super.onCleared()
         classifier.close()
+        locationManager.stopTracking()
     }
 
-    /**
-     * Tyhjentää otetun kuvan ja tunnistustuloksen.
-     */
     fun clearCapturedImage() {
         _capturedImagePath.value = null
         _classificationResult.value = null
+        _userComment.value = ""
     }
 }

@@ -93,4 +93,6 @@ dependencies {
 
     // Guava – ratkaisee Firebase + CameraX ListenableFuture -ristiriidan
     implementation("com.google.guava:guava:32.1.3-android")
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }

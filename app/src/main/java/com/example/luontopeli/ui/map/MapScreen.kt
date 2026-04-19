@@ -1,3 +1,4 @@
+
 // 📁 ui/map/MapScreen.kt
 package com.example.luontopeli.ui.map
 
@@ -44,7 +45,6 @@ fun MapScreen(
         )
     )
 
-    // ACTIVITY_RECOGNITION tarvitaan Android 10+ askelmittarille
     val activityRecognitionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { /* granted */ }
@@ -55,7 +55,6 @@ fun MapScreen(
         }
     }
 
-    // Näytä lupapyyntö-UI jos luvat puuttuu
     if (!permissionState.allPermissionsGranted) {
         Column(
             modifier = Modifier.fillMaxSize(),
@@ -77,41 +76,31 @@ fun MapScreen(
     val currentLocation by mapViewModel.currentLocation.collectAsState()
     val natureSpots by mapViewModel.natureSpots.collectAsState()
 
-    // Aloita/lopeta sijaintiseuranta kävelyn tilan mukaan
     LaunchedEffect(isWalking) {
         if (isWalking) mapViewModel.startTracking()
         else mapViewModel.stopTracking()
     }
 
-    // Oulu oletussijaintina (koordinaatit: lat 65.01, lon 25.47)
     val defaultPosition = GeoPoint(65.0121, 25.4651)
 
-    // Aseta osmdroidin User Agent — PAKOLLINEN, muuten kartta ei lataudu
     LaunchedEffect(Unit) {
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // --- Karttanäkymä ---
         Box(modifier = Modifier.weight(1f)) {
-
-            // remember: MapView-instanssi muistetaan rekompositionien yli
             val mapViewState = remember { MapView(context) }
 
             DisposableEffect(Unit) {
-                // Karttatyyli: MAPNIK = OpenStreetMap-oletustiilet
                 mapViewState.setTileSource(TileSourceFactory.MAPNIK)
-                // Mahdollista monisormipinch-zoom
                 mapViewState.setMultiTouchControls(true)
                 mapViewState.controller.setZoom(15.0)
                 mapViewState.controller.setCenter(
                     currentLocation?.let { GeoPoint(it.latitude, it.longitude) }
                         ?: defaultPosition
                 )
-
                 onDispose {
-                    // Vapauta resurssit kun Composable poistuu
                     mapViewState.onDetach()
                 }
             }
@@ -119,48 +108,49 @@ fun MapScreen(
             AndroidView(
                 factory = { mapViewState },
                 modifier = Modifier.fillMaxSize(),
-                // update kutsutaan kun routePoints, currentLocation tai natureSpots muuttuu
                 update = { mapView ->
                     mapView.overlays.clear()
 
-                    // --- Reittiviiiva (Polyline) ---
+                    // Reittiviiva
                     if (routePoints.size >= 2) {
                         val polyline = Polyline().apply {
                             setPoints(routePoints)
-                            outlinePaint.color = 0xFF2E7D32.toInt()  // M3-vihreä
+                            outlinePaint.color = 0xFF2E7D32.toInt()
                             outlinePaint.strokeWidth = 8f
                         }
                         mapView.overlays.add(polyline)
                     }
 
-                    // --- Luontokohteiden markkerit ---
+                    // --- Luontokohteiden markkerit kommentteineen ---
                     natureSpots.forEach { spot ->
                         val marker = Marker(mapView).apply {
                             position = GeoPoint(spot.latitude, spot.longitude)
-                            // Näytä kasvin nimi tai kohteen nimi info-ikkunassa
-                            title = spot.plantLabel ?: spot.name
-                            snippet = spot.timestamp.toFormattedDate()
+                            title = spot.name
+                            // Näytetään kommentti ja aikaleima info-ikkunassa
+                            snippet = if (!spot.comment.isNullOrBlank()) {
+                                "\"${spot.comment}\"\n${spot.timestamp.toFormattedDate()}"
+                            } else {
+                                spot.timestamp.toFormattedDate()
+                            }
                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         }
                         mapView.overlays.add(marker)
                     }
 
-                    // --- Seuraa nykyistä sijaintia ---
+                    // Seuraa sijaintia vain jos seuranta on päällä
                     currentLocation?.let { loc ->
                         mapView.controller.animateTo(GeoPoint(loc.latitude, loc.longitude))
                     }
 
-                    mapView.invalidate()  // Piirretään kartta uudelleen
+                    mapView.invalidate()
                 }
             )
         }
 
-        // --- Kävelytilasto-kortti alareunassa ---
         WalkStatsCard(walkViewModel)
     }
 }
 
-// 📁 ui/map/MapScreen.kt (jatkoa)
 @Composable
 fun WalkStatsCard(viewModel: WalkViewModel) {
     val session by viewModel.currentSession.collectAsState()
@@ -181,7 +171,6 @@ fun WalkStatsCard(viewModel: WalkViewModel) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
 
-            // Näytä tilastot vain jos sessio on olemassa
             session?.let { s ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

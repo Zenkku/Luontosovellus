@@ -1,41 +1,39 @@
+
 // 📁 ui/stats/StatsScreen.kt
 package com.example.luontopeli.ui.stats
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.NaturePeople
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.example.luontopeli.viewmodel.StatsViewModel
 import com.example.luontopeli.viewmodel.formatDistance
 import com.example.luontopeli.viewmodel.formatDuration
 import com.example.luontopeli.viewmodel.toFormattedDate
+import java.io.File
 
 /**
- * Tilastonakyma – kokonaistilastot ja kävelyhistoria.
- *
- * Näyttää käyttäjän kokonaistilastot 4 yhteenvetokortissa:
- * - Askeleet yhteensä (kaikista kävelykerroista)
- * - Matka yhteensä (kilometreinä/metreinä)
- * - Löytöjen kokonaismäärä
- * - Kävelylenkkien lukumäärä
- *
- * Alapuolella kävelyhistoria: jokainen lenkki omana korttinaan.
+ * Tilastonäkymä – kokonaistilastot, kävelyhistoria ja löydöt kuvineen ja kommentteineen.
  */
 @Composable
 fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
     val sessions by viewModel.allSessions.collectAsState()
-    val totalSpots by viewModel.totalSpots.collectAsState()
+    val spots by viewModel.allSpots.collectAsState()
 
-    // Lasketaan kokonaistilastot kaikista kävelykerroista
     val totalSteps = sessions.sumOf { it.stepCount }
     val totalDistance = sessions.sumOf { it.distanceMeters.toDouble() }.toFloat()
 
@@ -43,7 +41,6 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Sivun otsikko
         item {
             Text(
                 "Tilastot",
@@ -52,7 +49,7 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
             )
         }
 
-        // Yhteenveto-kortit rivi 1: Askeleet + Matka
+        // Yhteenveto-kortit
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -60,37 +57,99 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
             ) {
                 StatSummaryCard(
                     value = "$totalSteps",
-                    label = "Askelta yhteensä",
+                    label = "Askelta",
                     modifier = Modifier.weight(1f)
                 )
                 StatSummaryCard(
                     value = formatDistance(totalDistance),
-                    label = "Matka yhteensä",
+                    label = "Matka",
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // Yhteenveto-kortit rivi 2: Löydöt + Kävelylenkit
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 StatSummaryCard(
-                    value = "$totalSpots",
+                    value = "${spots.size}",
                     label = "Löytöjä",
                     modifier = Modifier.weight(1f)
                 )
                 StatSummaryCard(
                     value = "${sessions.size}",
-                    label = "Kävelylenkkejä",
+                    label = "Lenkkejä",
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        // Kävelyhistoria-osio
+        // Viimeisimmät löydöt, kuvat ja kommentit
+        if (spots.isNotEmpty()) {
+            item {
+                Text(
+                    "Viimeisimmät löydöt",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+            items(spots) { spot ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Näytetään kuva jos se on olemassa
+                        if (spot.imageLocalPath != null) {
+                            AsyncImage(
+                                model = File(spot.imageLocalPath),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(70.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.NaturePeople, 
+                                contentDescription = null,
+                                modifier = Modifier.size(70.dp),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        
+                        Spacer(Modifier.width(12.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(spot.name, style = MaterialTheme.typography.titleSmall)
+                            
+                            // TÄMÄ KOHTA NÄYTTÄÄ KOMMENTIN
+                            if (!spot.comment.isNullOrBlank()) {
+                                Text(
+                                    "\"${spot.comment}\"",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                            
+                            Text(
+                                spot.timestamp.toFormattedDate(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Kävelyhistoria
         if (sessions.isNotEmpty()) {
             item {
                 Text(
@@ -99,102 +158,59 @@ fun StatsScreen(viewModel: StatsViewModel = viewModel()) {
                     modifier = Modifier.padding(top = 16.dp)
                 )
             }
-            // Jokainen kävelykerta omana korttinaan
             items(sessions) { session ->
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Kävelyikoni
                         Icon(
                             Icons.Default.DirectionsWalk, null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(32.dp)
                         )
                         Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            // Askeleet ja matka
+                        Column {
                             Text(
                                 "${session.stepCount} askelta • ${formatDistance(session.distanceMeters)}",
                                 style = MaterialTheme.typography.titleSmall
                             )
-                            // Aloitusaika
                             Text(
                                 session.startTime.toFormattedDate(),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.Gray
                             )
-                            // Kesto (näytetään vain jos kävely on päättynyt)
-                            session.endTime?.let { end ->
-                                Text(
-                                    "Kesto: ${formatDuration(session.startTime, end)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
-                            }
                         }
                     }
                 }
             }
-        } else {
-            // Tyhjä tila – ei kävelylenkkejä vielä
+        }
+
+        if (sessions.isEmpty() && spots.isEmpty()) {
             item {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 32.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.BarChart, null,
-                            modifier = Modifier.size(48.dp), tint = Color.Gray
-                        )
-                        Text(
-                            "Ei kävelylenkkejä vielä",
-                            color = Color.Gray,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+                    Text("Ei vielä merkintöjä", color = Color.Gray)
                 }
             }
         }
     }
 }
 
-/**
- * Yhteenvetotilastokortti.
- *
- * Näyttää yhden tilastoarvon otsikolla (2x2 ruudukko StatsScreenissä).
- */
 @Composable
-fun StatSummaryCard(
-    value: String,
-    label: String,
-    modifier: Modifier = Modifier
-) {
+fun StatSummaryCard(value: String, label: String, modifier: Modifier = Modifier) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Tilastoarvo suurella fontilla
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            // Seliteteksti pienellä fontilla
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall
-            )
+            Text(text = value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Text(text = label, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
